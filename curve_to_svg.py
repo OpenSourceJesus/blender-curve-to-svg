@@ -293,7 +293,7 @@ def register():
     bpy.types.Scene.export_svg_scale = bpy.props.IntProperty(
             name="Scale",
             description="How many pixels one blender unit represents",
-            default=10,
+            default=1,
             min=1)
 
     bpy.types.Scene.export_svg_precision = bpy.props.IntProperty(
