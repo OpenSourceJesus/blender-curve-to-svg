@@ -299,7 +299,7 @@ def register():
     bpy.types.Scene.export_svg_precision = bpy.props.IntProperty(
             name="Precision",
             description="Precision of floating point Vectors",
-            default=4,
+            default=0,
             min=0,
             max=21)
 
