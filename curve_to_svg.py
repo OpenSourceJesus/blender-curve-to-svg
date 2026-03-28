@@ -15,30 +15,9 @@ import bpy
 from xml.etree import ElementTree
 from xml.dom import minidom
 from mathutils import Vector
-from math import pi
 
 
 VERSION = '.'.join(str(v) for v in (bl_info['version']))
-
-
-def svg_transform(obj, precision):
-    """Returns SVG transform for object"""
-
-    loc = obj.location.to_2d().to_tuple(precision)
-    scl = obj.scale.to_2d().to_tuple(precision)
-    rot = round(obj.rotation_euler.z * 180 / pi, precision)
-    result = []
-
-    if rot:
-        result.append("rotate({} {} {})".format(rot, *loc))
-
-    if loc[0] or loc[1]:
-        result.append("translate({} {})".format(*loc))
-
-    if scl[0] != 1.0 or scl[1] != 1.0:
-        result.append("scale({} {})".format(*scl))
-
-    return ' '.join(result)
 
 
 def to_hex(ch):
@@ -188,7 +167,7 @@ class DATA_OT_CurveExportSVG(bpy.types.Operator):
 
         for spline in obj.data.splines:
             id = spline.material_index
-            d = self.spline_to_path(spline, precision)
+            d = self.spline_to_path(obj, spline, precision)
 
             if id in paths:
                 paths[id].extend(d)
@@ -198,10 +177,6 @@ class DATA_OT_CurveExportSVG(bpy.types.Operator):
         if materials:
             container = ElementTree.Element('g')
             container.set('id', obj.name)
-
-            transform = svg_transform(obj, precision)
-            if transform:
-                container.set('transform', transform)
 
             for id, d in paths.items():
                 path = ElementTree.SubElement(container, 'path')
@@ -216,16 +191,12 @@ class DATA_OT_CurveExportSVG(bpy.types.Operator):
         path = ElementTree.Element('path')
         path.set('id', obj.name)
 
-        transform = svg_transform(obj, precision)
-        if transform:
-            path.set('transform', transform)
-
         path.set('d', ' '.join(paths[0]))
 
         return path
 
 
-    def spline_to_path(self, spline, precision):
+    def spline_to_path(self, obj, spline, precision):
         """Converts a Curve Spline to 'd' attribute for path element"""
 
         d = []
@@ -234,24 +205,25 @@ class DATA_OT_CurveExportSVG(bpy.types.Operator):
         # TODO: fix when points are in inverted order
         # problem: some paths do union instead of difference
         for point in spline.bezier_points:
-            prev = self.add_command(d, point, prev, precision)
+            prev = self.add_command(d, obj, point, prev, precision)
 
         if spline.use_cyclic_u:
-            self.add_command(d, spline.bezier_points[0], prev, precision)
+            self.add_command(d, obj, spline.bezier_points[0], prev, precision)
             d.append(self.commands['closepath'])
 
         return d
 
 
-    def add_command(self, d, point, prev, precision):
+    def add_command(self, d, obj, point, prev, precision):
         """Adds the path's next command, returns previous handler point"""
 
-        p = point.co.to_2d().to_tuple(precision)
+        matrix_world = obj.matrix_world
+        p = (matrix_world @ point.co).to_2d().to_tuple(precision)
         values = {'x': p[0], 'y': p[1]}
         # TODO: type will be used to choose between L C S commands
         # C can do all the job, but using the others can reduce the svg
-        l = (point.handle_left.to_2d().to_tuple(precision), point.handle_left_type)
-        r = (point.handle_right.to_2d().to_tuple(precision), point.handle_right_type)
+        l = ((matrix_world @ point.handle_left).to_2d().to_tuple(precision), point.handle_left_type)
+        r = ((matrix_world @ point.handle_right).to_2d().to_tuple(precision), point.handle_right_type)
 
         # first command is moveto first point, then curveto others points
         if not d:
